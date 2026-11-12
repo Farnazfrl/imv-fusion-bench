@@ -200,6 +200,27 @@ def test_time_imputers():
     assert all(float(r["seconds"]) >= 0 for r in rows)
 
 
+def test_handwritten_loader_six_views():
+    """Fake mfeat files -> the registered 'handwritten' dataset with all imputers (6 views)."""
+    from dataclasses import replace
+    from imvbench.data import build_data
+    from imvbench.datasets import MFEAT_VIEWS, get_dataset, register_dataset
+    register_dataset(replace(get_dataset("handwritten"), cpm_epochs=2, dcp_epochs=2))   # fast test
+    rng = np.random.default_rng(0)
+    folder = os.path.join(os.environ["IMVB_DATA_DIR"], "handwritten", "mfeat")
+    os.makedirs(folder, exist_ok=True)
+    labels = np.repeat(np.arange(10), 200)
+    for name, dim in MFEAT_VIEWS:
+        x = rng.normal(size=(2000, dim)) + labels[:, None] * 0.3 + rng.uniform(0, 100, size=dim)
+        np.savetxt(os.path.join(folder, f"mfeat-{name}"), x, fmt="%.5f")
+    for imp in ("knn", "cpm", "dcp"):
+        d = build_data("handwritten", imp, 0.7, 7)
+        assert len(d.train) + len(d.val) == 1600 and len(d.test) == 400
+        assert [x.shape[1] for x in d.test.views] == [76, 216, 64, 240, 47, 6]
+        assert not d.train.mask.all(dim=1).any()
+        assert sorted(np.bincount(d.test.labels.numpy()).tolist()) == [40] * 10      # stratified
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

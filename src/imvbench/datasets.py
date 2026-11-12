@@ -254,6 +254,45 @@ def mosei_loader(root: str, classes: int = 2):
 
 
 # --------------------------------------------------------------------------------------
+# Handwritten digits (UCI Multiple Features, "mfeat"): 2000 digits, 6 views
+# --------------------------------------------------------------------------------------
+MFEAT_VIEWS = [("fou", 76), ("fac", 216), ("kar", 64), ("pix", 240), ("zer", 47), ("mor", 6)]
+
+
+def handwritten_loader(root: str, test_fraction: float = 0.2, split_seed: int = 0):
+    """Reads the six files mfeat-fou, -fac, -kar, -pix, -zer, -mor from <root>/handwritten (or
+    <root>/handwritten/mfeat). Rows are ordered by digit, 200 per digit 0..9. There is no official
+    test set: a stratified 20 % test split is drawn once with a fixed seed. Each feature is
+    standardised with the training statistics (and clipped to +-10) before the per-sample L2
+    normalisation, because the features of a view have very different scales."""
+    folder = os.path.join(root, "handwritten")
+    if os.path.isdir(os.path.join(folder, "mfeat")):
+        folder = os.path.join(folder, "mfeat")
+    raw = {}
+    for v, (name, dim) in enumerate(MFEAT_VIEWS):
+        path = os.path.join(folder, f"mfeat-{name}")
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"{path} not found: unzip the UCI 'Multiple Features' data into {folder}")
+        x = np.loadtxt(path, dtype=np.float32).reshape(-1, dim)
+        if x.shape != (2000, dim):
+            raise ValueError(f"{path}: expected 2000 x {dim}, got {x.shape}")
+        raw[v] = x
+    labels = np.repeat(np.arange(10, dtype=np.int64), 200)
+    rng = np.random.default_rng(split_seed)
+    test = np.zeros(len(labels), dtype=bool)
+    for c in range(10):
+        idx = np.where(labels == c)[0]
+        test[rng.choice(idx, size=int(round(test_fraction * len(idx))), replace=False)] = True
+    out = []
+    stats = {v: (x[~test].mean(axis=0), x[~test].std(axis=0) + 1e-6) for v, x in raw.items()}
+    for sel in (~test, test):
+        views = {v: np.clip((x[sel] - stats[v][0]) / stats[v][1], -10, 10).astype(np.float32)
+                 for v, x in raw.items()}
+        out.append(ArrayViews(views, labels[sel]))
+    return tuple(out)
+
+
+# --------------------------------------------------------------------------------------
 # The four multi-view datasets (settings as in the two-head repository)
 # --------------------------------------------------------------------------------------
 register_dataset(DatasetSpec(
@@ -292,6 +331,12 @@ register_dataset(DatasetSpec(
     loader=lambda root: mosei_loader(root, classes=7),
     imputer_hidden=128, cpm_epochs=20, dcp_epochs=100,
     description="CMU-MOSEI sentiment, 7 classes (rounded score); text + audio + vision"))
+
+
+register_dataset(DatasetSpec(
+    name="handwritten", num_classes=10, view_dims={v: d for v, (_, d) in enumerate(MFEAT_VIEWS)},
+    loader=handwritten_loader, imputer_hidden=128, cpm_epochs=50, dcp_epochs=100,
+    description="UCI Multiple Features (handwritten digits), 6 views"))
 
 
 # Extra datasets registered by user modules (IMVB_PLUGINS=module_a,module_b)

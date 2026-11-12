@@ -58,7 +58,18 @@ sensit_vehicle_features/{acoustic, seismic, acoustic.t, seismic.t}
 uci_har_dataset/{features.txt, train/X_train.txt, train/y_train.txt, test/X_test.txt, test/y_test.txt}
 youtube/{train,test}/{text_game_lda_1000.txt, vision_cuboids_histogram.txt, audio_mfcc.txt}
 mosei/mosei_pooled.npz                     (made by scripts/prepare_mosei.py, see below)
+handwritten/mfeat-{fou,fac,kar,pix,zer,mor}
 ```
+
+### Handwritten (UCI Multiple Features)
+
+Download the "Multiple Features" data set from the UCI Machine Learning Repository
+(archive.ics.uci.edu, data set 72) and unzip it into `data/handwritten/` (the six files
+`mfeat-fou`, `mfeat-fac`, `mfeat-kar`, `mfeat-pix`, `mfeat-zer`, `mfeat-mor`, directly or in a
+`mfeat/` subfolder). Dataset `handwritten`: 2,000 digits, 10 classes, 6 views (76 Fourier, 216
+profile-correlation, 64 Karhunen-Loève, 240 pixel, 47 Zernike and 6 morphological features). As
+there is no official test set, a stratified 20 % test split (400 digits) is drawn once with a
+fixed seed.
 
 ### CMU-MOSEI
 
