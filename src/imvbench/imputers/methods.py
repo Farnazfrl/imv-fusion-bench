@@ -8,6 +8,7 @@ DCP weight files keep the same names, so weights cached by that repository are r
 
 import fcntl
 import os
+import socket
 from contextlib import contextmanager
 from typing import Dict, List
 
@@ -53,7 +54,10 @@ def _locked(path: str):
 
 
 def _save(obj, path: str):
-    tmp = path + ".tmp"
+    """Atomic write through a temporary file unique to this process: file locks are not always
+    honoured across the nodes of a cluster file system, so two processes may train the same
+    imputer at once; each then writes its own temporary file and the last rename wins."""
+    tmp = f"{path}.{socket.gethostname()}.{os.getpid()}.tmp"
     torch.save(obj, tmp)
     os.replace(tmp, path)
 
