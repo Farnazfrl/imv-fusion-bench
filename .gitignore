@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.DS_Store
+*.tmp
+*.lock
+!uv.lock
+
+# data, model weights and results stay local
+data/
+weights/
+results/
+
+# cluster / job-scheduler files are never committed
+slurm/
+logs/
+*.sbatch
+*.slurm
+*.out
+*.err
