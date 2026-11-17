@@ -1,7 +1,7 @@
 """Command line interface:  python -m imvbench <command> [options]
 
   tasks       list the (dataset, fusion, imputer) configurations and their task indices
-  precompute  train / cache the CPM-Nets and DCP imputers for all rates and seeds
+  precompute  train / cache the CPM-Nets, DCP and MVAE imputers for all rates and seeds
   tune        independent Optuna search per configuration
   evaluate    retrain each tuned configuration on the evaluation seeds and test it
   run         tune, then evaluate
@@ -145,9 +145,9 @@ def main(argv=None):
     common(sub.add_parser("status", help="progress"), train=False)
     rp = sub.add_parser("report", help="tables and tests")
     rp.add_argument("--datasets", nargs="+")
-    pp = sub.add_parser("precompute", help="train the CPM-Nets / DCP imputers")
+    pp = sub.add_parser("precompute", help="train the CPM-Nets / DCP / MVAE imputers")
     pp.add_argument("--datasets", nargs="+", default=DEFAULT_DATASETS)
-    pp.add_argument("--imputers", nargs="+", default=["cpm", "dcp"], choices=["cpm", "dcp"])
+    pp.add_argument("--imputers", nargs="+", default=["cpm", "dcp"], choices=["cpm", "dcp", "mvae"])
     pp.add_argument("--rates", nargs="+", type=float)
     pp.add_argument("--seeds", nargs="+", type=int)
     pp.add_argument("--task-index", type=int, help="only this (dataset, imputer) pair")

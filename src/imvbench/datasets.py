@@ -42,6 +42,7 @@ class DatasetSpec:
     imputer_hidden: int = 128    # CPM-Nets latent size and DCP hidden size
     cpm_epochs: int = 20
     dcp_epochs: int = 100
+    mvae_epochs: int = 100
     description: str = ""
 
 

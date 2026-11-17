@@ -36,7 +36,7 @@ def test_missing_matrix():
 
 def test_configurations():
     confs = configurations(["a"])
-    assert len(confs) == 37
+    assert len(confs) == 43
     assert ("a", "late", "drop") in confs and ("a", "mid", "drop") not in confs
     assert ("a", "mid", "cpm+mask") in confs and ("a", "late", "drop+mask") not in confs
 
@@ -114,7 +114,7 @@ def test_split_matches_random_split():
 
 def test_build_data_all_imputers():
     from imvbench.data import build_data
-    for imp in ("zero", "mean", "gaus", "knn", "cpm", "dcp", "drop", "knn+mask"):
+    for imp in ("zero", "mean", "gaus", "knn", "cpm", "dcp", "mvae", "drop", "knn+mask"):
         d = build_data("synthetic", imp, 0.5, 7)
         assert len(d.train) + len(d.val) == 400 and len(d.test) == 150
         for s in (d.train, d.val, d.test):
@@ -129,6 +129,34 @@ def test_build_data_all_imputers():
     names = sorted(os.listdir(os.environ["IMVB_WEIGHTS_DIR"]))
     assert any(n.startswith("cpm_weights_synthetic_missing0.5_seed7_val") for n in names)
     assert any(n.startswith("dcp_weights_synthetic_missing0.5_seed7") for n in names)
+    assert "mvae_weights_synthetic_missing0.5_seed7.pth" in names
+
+
+def test_mvae():
+    """Product of experts, no use of the hidden values of missing views, and a falling loss."""
+    from imvbench.imputers.mvae import MVAE, train_mvae
+    torch.manual_seed(0)
+    model = MVAE([5, 3, 4], latent_dim=4, hidden=16)
+    mu = torch.randn(2, 3, 4)
+    logvar = torch.randn(2, 3, 4).clamp(-2, 2)
+    use = torch.tensor([[True, False, True], [False, False, False]])
+    m, lv = model.product_of_experts(mu, logvar, use)
+    prec = 1 + torch.exp(-logvar[0, 0]) + torch.exp(-logvar[0, 2])
+    assert torch.allclose(lv[0], -torch.log(prec), atol=1e-6)
+    assert torch.allclose(m[0], (mu[0, 0] * torch.exp(-logvar[0, 0]) + mu[0, 2] * torch.exp(-logvar[0, 2])) / prec, atol=1e-6)
+    assert torch.allclose(m[1], torch.zeros(4)) and torch.allclose(lv[1], torch.zeros(4))    # prior only
+    views = [torch.nn.functional.normalize(torch.randn(64, d), dim=1) for d in (5, 3, 4)]
+    observed = torch.rand(64, 3) > 0.3
+    observed[:, 0] = True
+    changed = [x.clone() for x in views]
+    changed[1][~observed[:, 1]] = 99.0                     # hidden values of missing views
+    out_a, out_b = model.impute(views, observed), model.impute(changed, observed)
+    assert all(torch.allclose(a, b) for a, b in zip(out_a, out_b))
+    torch.manual_seed(1)
+    before = model.loss(views, observed, beta=1.0).item()
+    train_mvae(model, views, ~observed, epochs=30, device="cpu", batch_size=16)
+    torch.manual_seed(1)
+    assert model.loss(views, observed, beta=1.0).item() < before
 
 
 def test_training_is_deterministic():
@@ -196,7 +224,7 @@ def test_time_imputers():
     subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "time_imputers.py"),
                     "--datasets", "synthetic", "--out", out, "--hidden", "16"], check=True, env=env)
     rows = list(csv.DictReader(open(out)))
-    assert {r["method"] for r in rows} == {"zero", "mean", "gaus", "knn", "cpm", "dcp", "classifier"}
+    assert {r["method"] for r in rows} == {"zero", "mean", "gaus", "knn", "cpm", "dcp", "mvae", "classifier"}
     assert all(float(r["seconds"]) >= 0 for r in rows)
 
 
@@ -205,7 +233,7 @@ def test_handwritten_loader_six_views():
     from dataclasses import replace
     from imvbench.data import build_data
     from imvbench.datasets import MFEAT_VIEWS, get_dataset, register_dataset
-    register_dataset(replace(get_dataset("handwritten"), cpm_epochs=2, dcp_epochs=2))   # fast test
+    register_dataset(replace(get_dataset("handwritten"), cpm_epochs=2, dcp_epochs=2, mvae_epochs=2))   # fast test
     rng = np.random.default_rng(0)
     folder = os.path.join(os.environ["IMVB_DATA_DIR"], "handwritten", "mfeat")
     os.makedirs(folder, exist_ok=True)
@@ -213,7 +241,7 @@ def test_handwritten_loader_six_views():
     for name, dim in MFEAT_VIEWS:
         x = rng.normal(size=(2000, dim)) + labels[:, None] * 0.3 + rng.uniform(0, 100, size=dim)
         np.savetxt(os.path.join(folder, f"mfeat-{name}"), x, fmt="%.5f")
-    for imp in ("knn", "cpm", "dcp"):
+    for imp in ("knn", "cpm", "dcp", "mvae"):
         d = build_data("handwritten", imp, 0.7, 7)
         assert len(d.train) + len(d.val) == 1600 and len(d.test) == 400
         assert [x.shape[1] for x in d.test.views] == [76, 216, 64, 240, 47, 6]

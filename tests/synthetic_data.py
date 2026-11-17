@@ -23,4 +23,4 @@ class Synthetic(Dataset):
 register_dataset(DatasetSpec(
     name="synthetic", num_classes=3, view_dims={0: 12, 1: 8},
     loader=lambda root: (Synthetic(400, 0), Synthetic(150, 1)),
-    imputer_hidden=16, cpm_epochs=2, dcp_epochs=2))
+    imputer_hidden=16, cpm_epochs=2, dcp_epochs=2, mvae_epochs=2))

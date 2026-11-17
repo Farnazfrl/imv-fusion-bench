@@ -18,8 +18,9 @@ from torch.utils.data import DataLoader, Dataset
 
 from imvbench.imputers.cpm_nets import CPMNet_Works
 from imvbench.imputers.dcp_nets import DCP_Net, dcp_loss
+from imvbench.imputers.mvae import MVAE, train_mvae
 
-CHUNK = 8192    # rows decoded at once by CPM-Nets / DCP
+CHUNK = 8192    # rows decoded at once by CPM-Nets / DCP / MVAE
 
 
 # --------------------------------------------------------------------------------------
@@ -293,11 +294,45 @@ def dcp_impute(spec, splits, rate, seed, weights_dir, device):
 
 
 # --------------------------------------------------------------------------------------
+# MVAE
+# --------------------------------------------------------------------------------------
+def _mvae_recon(model, views, mask, device):
+    """Decoded posterior means for the missing rows of every view (in chunks)."""
+    V = len(views)
+    rows = torch.nonzero(mask.any(dim=1)).flatten()
+    parts = {v: [] for v in range(V)}
+    for s in range(0, len(rows), CHUNK):
+        r = rows[s:s + CHUNK]
+        m = mask[r]
+        out = model.impute([x[r].to(device) for x in views], (~m).to(device))
+        for v in range(V):
+            parts[v].append(out[v][m[:, v].to(out[v].device)].cpu())
+    return {v: torch.cat(parts[v]) for v in range(V) if parts[v] and sum(len(p) for p in parts[v])}
+
+
+def mvae_impute(spec, splits, rate, seed, weights_dir, device):
+    tr = splits["train"]
+    weights = os.path.join(weights_dir, f"mvae_weights_{spec.name}_missing{rate}_seed{seed}.pth")
+    model = MVAE([spec.view_dims[v] for v in range(len(spec.view_dims))]).to(device)
+    with _locked(weights):
+        if os.path.exists(weights):
+            print(f"[{spec.name}] MVAE: loading {weights}", flush=True)
+            model.load_state_dict(torch.load(weights, map_location=device, weights_only=True))
+        else:
+            print(f"[{spec.name}] MVAE: training ({spec.mvae_epochs} epochs) -> {weights}", flush=True)
+            train_mvae(model, tr["views"], tr["mask"], spec.mvae_epochs, device)
+            _save(model.state_dict(), weights)
+    model.eval()
+    return {name: _fill(s["views"], s["mask"], _mvae_recon(model, s["views"], s["mask"], device))
+            for name, s in splits.items()}
+
+
+# --------------------------------------------------------------------------------------
 # Entry point
 # --------------------------------------------------------------------------------------
 def impute_splits(spec, imputer, splits, rate, seed, weights_dir, device):
     """splits: {"train"|"val"|"test": {"views", "labels", "mask"}} -> {split: imputed views}.
-    Mean, kNN, CPM-Nets and DCP are fitted on the training split only."""
+    Mean, kNN, CPM-Nets, DCP and MVAE are fitted on the training split only."""
     if imputer in ("zero", "drop"):
         return {k: zero_fill(s["views"], s["mask"]) for k, s in splits.items()}
     if imputer == "gaus":
@@ -312,4 +347,6 @@ def impute_splits(spec, imputer, splits, rate, seed, weights_dir, device):
         return cpm_impute(spec, splits, rate, seed, weights_dir, device)
     if imputer == "dcp":
         return dcp_impute(spec, splits, rate, seed, weights_dir, device)
+    if imputer == "mvae":
+        return mvae_impute(spec, splits, rate, seed, weights_dir, device)
     raise ValueError(f"Unknown imputer '{imputer}'")

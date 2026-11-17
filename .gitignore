@@ -19,3 +19,6 @@ logs/
 *.slurm
 *.out
 *.err
+
+# local experiments
+scripts/cpm_latent_classifier.py

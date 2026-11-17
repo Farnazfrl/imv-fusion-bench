@@ -3,7 +3,7 @@
 Fusion and imputation for neural classifiers on incomplete multi-view data. The benchmark compares
 
 * **fusion**: early, mid (concatenation), late (mean of per-view logits);
-* **imputation**: zero, mean, Gaussian noise, cross-view kNN, CPM-Nets, DCP, and for late fusion
+* **imputation**: zero, mean, Gaussian noise, cross-view kNN, CPM-Nets, DCP, MVAE, and for late fusion
   also **drop** (each sample averages only the decisions of its observed views);
 * **mask indicator**: every imputer also as `<imputer>+mask`, where the network additionally
   receives the missing-view mask m_n ∈ {0,1}^V (early: appended to the input; mid: appended to
@@ -12,7 +12,7 @@ Fusion and imputation for neural classifiers on incomplete multi-view data. The 
   and every sample keeps at least one view.
 
 Every (dataset, fusion, imputer) configuration has its **own** hyperparameter search:
-37 configurations per dataset (3 fusions × 6 imputers × with/without mask, plus late drop).
+43 configurations per dataset (3 fusions × 7 imputers × with/without mask, plus late drop).
 
 ## Protocol
 
@@ -42,7 +42,7 @@ Data, imputer weights and results live in folders set by environment variables:
 | variable | default | meaning |
 |---|---|---|
 | `IMVB_DATA_DIR` | `data` | raw features (layout below) |
-| `IMVB_WEIGHTS_DIR` | `weights` | cached CPM-Nets / DCP models |
+| `IMVB_WEIGHTS_DIR` | `weights` | cached CPM-Nets / DCP / MVAE models |
 | `IMVB_RESULTS_DIR` | `results` | Optuna studies, evaluation runs, report |
 | `TORCH_DEVICE` | auto | force `cpu` or `cuda:0` |
 
@@ -98,6 +98,7 @@ LIBSVM's `combined` files.
 | knn | mean of the view in the 10 training samples closest on the sample's observed views (donors observe all of them) |
 | cpm | CPM-Nets reconstruction |
 | dcp | DCP cross-view prediction |
+| mvae | MVAE: decoded posterior mean given the observed views (product of experts) |
 | drop | nothing: late fusion averages the observed views only |
 
 Append `+mask` (e.g. `cpm+mask`) to also give the network the missing-view mask.
@@ -105,15 +106,15 @@ Append `+mask` (e.g. `cpm+mask`) to also give the network the missing-view mask.
 ## Running
 
 ```bash
-uv run python -m imvbench tasks --datasets har                 # the 37 configurations and their indices
+uv run python -m imvbench tasks --datasets har                 # the 43 configurations and their indices
 uv run python -m imvbench run --datasets har --workers 3        # tune + evaluate all of them
 uv run python -m imvbench run --datasets har --task-index 7     # one configuration (e.g. one job of an array)
 uv run python -m imvbench status --datasets har                 # progress
 uv run python -m imvbench report --datasets har sensit          # -> results/report.md, results/cells.csv
 ```
 
-`tune` and `evaluate` can also be run separately; `precompute --datasets har --imputers cpm dcp`
-trains the CPM-Nets / DCP imputers for all rates and seeds. Selection options: `--datasets`,
+`tune` and `evaluate` can also be run separately; `precompute --datasets har --imputers cpm dcp mvae`
+trains the CPM-Nets / DCP / MVAE imputers for all rates and seeds. Selection options: `--datasets`,
 `--fusions`, `--imputers` (e.g. `zero cpm+mask drop`), `--task-index`. Other options:
 `--trials`, `--tune-rates`, `--tune-seeds`, `--eval-rates`, `--eval-seeds`, `--epochs`,
 `--batch-size`, `--workers` (parallel processes, one per seed), `--threads`, `--cache-size`.
@@ -121,7 +122,7 @@ trains the CPM-Nets / DCP imputers for all rates and seeds. Selection options: `
 Everything resumes: a restarted study continues from its finished trials, and evaluation skips
 finished (rate, seed) runs. If a study is re-tuned, its old evaluation file is renamed `*.stale`.
 
-Imputer cost (fit + fill, CPM-Nets and DCP trained from scratch) and one classifier training run:
+Imputer cost (fit + fill, CPM-Nets, DCP and MVAE trained from scratch) and one classifier training run:
 
 ```bash
 uv run python scripts/time_imputers.py --datasets har sensit modelnet mosei7 --out results/timing.csv
@@ -151,7 +152,7 @@ Put this in `src/imvbench/datasets.py`, or in your own module and set
 src/imvbench/
   datasets.py      dataset loaders + registry
   missingness.py   per-view MCAR missing matrices
-  imputers/        zero, mean, Gaussian, kNN, CPM-Nets, DCP
+  imputers/        zero, mean, Gaussian, kNN, CPM-Nets, DCP, MVAE
   data.py          splits, masks, imputation -> tensors
   models.py        early / mid / late fusion networks (+ mask input)
   train.py         AdamW training, best-validation selection, evaluation
@@ -168,4 +169,5 @@ tests/             synthetic end-to-end tests
 
 The dataset loaders, the missingness generator and the CPM-Nets / DCP imputers are ported from
 Brecht Lauwers' two-head repository (MIT). CPM-Nets: Zhang et al., NeurIPS 2019. DCP: Lin et
-al., TPAMI 2022.
+al., TPAMI 2022. MVAE: Wu & Goodman, NeurIPS 2018 (re-implemented after the reference code,
+https://github.com/mhw32/multimodal-vae-public).

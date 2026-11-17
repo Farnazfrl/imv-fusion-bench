@@ -1,7 +1,7 @@
 """imvbench: fusion and imputation for neural classifiers on incomplete multi-view data.
 
 Compares fusion types (early, mid, late), imputers (zero, mean, Gaussian noise, cross-view kNN,
-CPM-Nets, DCP, and dropping the missing views in late fusion), with or without a missing-view
+CPM-Nets, DCP, MVAE, and dropping the missing views in late fusion), with or without a missing-view
 indicator given to the network, and missing rates, with every configuration tuned independently.
 
 Imputer names: "zero", "mean", ...; "<imputer>+mask" also feeds the missing-view mask m_n to the
@@ -9,7 +9,7 @@ network; "drop" (late fusion only) averages the decisions of the observed views 
 """
 
 FUSIONS = ["early", "mid", "late"]
-IMPUTERS = ["zero", "mean", "gaus", "knn", "cpm", "dcp"]
+IMPUTERS = ["zero", "mean", "gaus", "knn", "cpm", "dcp", "mvae"]
 MASK_SUFFIX = "+mask"
 LATE_ONLY_IMPUTERS = ["drop"]          # late fusion: average only the observed views
 ALL_IMPUTERS = [i + s for i in IMPUTERS for s in ("", MASK_SUFFIX)] + LATE_ONLY_IMPUTERS

@@ -2,7 +2,7 @@
 views of the train, validation and test splits (one dataset, missing rate and seed), plus the
 training of one classifier for reference.
 
-CPM-Nets and DCP are trained from scratch in a temporary folder (cached weights are not used).
+CPM-Nets, DCP and MVAE are trained from scratch in a temporary folder (cached weights are not used).
 Run it on the hardware you want to report:
 
     uv run python scripts/time_imputers.py --datasets har sensit modelnet mosei7 \
@@ -29,7 +29,7 @@ from imvbench.train import run, set_seed                      # noqa: E402
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--datasets", nargs="+", required=True)
-    ap.add_argument("--imputers", nargs="+", default=["zero", "mean", "gaus", "knn", "cpm", "dcp"])
+    ap.add_argument("--imputers", nargs="+", default=["zero", "mean", "gaus", "knn", "cpm", "dcp", "mvae"])
     ap.add_argument("--rate", type=float, default=0.5)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--hidden", type=int, default=256, help="classifier width for the reference run")
@@ -50,7 +50,7 @@ def main():
     for ds in a.datasets:
         spec, splits = prepare_splits(ds, a.rate, a.seed)
         n_train = len(splits["train"]["labels"])
-        with tempfile.TemporaryDirectory() as weights:          # no cached CPM-Nets / DCP weights
+        with tempfile.TemporaryDirectory() as weights:          # no cached CPM-Nets / DCP / MVAE weights
             for imp in a.imputers:
                 set_seed(a.seed)
                 if str(device).startswith("cuda"):
